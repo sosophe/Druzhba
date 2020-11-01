@@ -12,6 +12,7 @@ import streamlit as st
 from nltk.stem.snowball import SnowballStemmer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity, linear_kernel
+
 # from surprise import SVD, Dataset, KNNBasic, Reader, accuracy
 # from surprise.model_selection import train_test_split
 
@@ -40,21 +41,18 @@ def get_books(input_uid):
         x[1] for x in sorted(pred_book, key=lambda x: x[0], reverse=True)[:30]
     ]
     try:
-        user_age = (readers_birthday[readers_birthday.userid == input_uid]["age"]).values[0]
+        user_age = (
+            readers_birthday[readers_birthday.userid == input_uid]["age"]
+        ).values[0]
     except Exception as e:
         user_age = 9999
 
     df = database[database.itemid.isin(final_pred_books)]
 
-    return df[(df.age_cat <= user_age)]
-
-
-
+    return df[(df.age_cat <= user_age)], user_age
 
 
 stemmer = SnowballStemmer("russian")
-
-
 
 
 # In[2]:
@@ -783,11 +781,6 @@ def get_club_recommendations(
     return group_corrs.sum().sort_values().reset_index()[-topN:]
 
 
-
-
-
-
-
 # In[10]:
 
 # Тут должен быть вектор из эмбеддинга книг
@@ -807,17 +800,13 @@ def get_club_recommendations(
 import string
 
 
-
 table = str.maketrans("", "", string.punctuation)
 
-with open("raw_dict.pickle","rb") as pickle_in:
+with open("raw_dict.pickle", "rb") as pickle_in:
     cat_to_vec = pickle.load(pickle_in)
 
 
-
-
 # In[12]:
-
 
 
 st.title("Рекомендательная система от команды Дружба")
@@ -825,7 +814,7 @@ st.title("Рекомендательная система от команды Д
 user_input = st.text_input("Введите пожалуйста свой id", "")
 
 if user_input != "":
-    result_books = get_books(int(user_input))
+    result_books, user_age = get_books(int(user_input))
     st.subheader(
         "Основываясь на ваших предпочтениях мы рекомендуем вам следующие книги:"
     )
@@ -844,15 +833,18 @@ if user_input != "":
             break
 
     key_words = result_books["category"].unique()
-    request_words = [w.translate(table).lower() for w in " ".join(key_words).lower().split()]
-    request_input = np.array([cat_to_vec.get(key) for key in key_words if cat_to_vec.get(key) is not None])
+    request_words = [
+        w.translate(table).lower() for w in " ".join(key_words).lower().split()
+    ]
+    request_input = np.array(
+        [cat_to_vec.get(key) for key in key_words if cat_to_vec.get(key) is not None]
+    )
     if len(request_input) == 0:
         request_input = np.array([1 for _ in range(605)])
     embed_vector = compose_embedd_vector(words=request_input, age=[1, 1, 1, 1, 1])
     age_request = user_age
     age_request_cat = "16+"
     result_events = get_event(embed_vector, request_words, age_request)
-
 
     st.subheader("Возможно вам также будет интересно посетить данные мероприятия:\n")
     i = 1
